@@ -5,7 +5,7 @@ a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[('C:\\Python313\\Lib\\site-packages\\clip\\bpe_simple_vocab_16e6.txt.gz', 'clip')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

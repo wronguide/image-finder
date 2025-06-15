@@ -3,6 +3,19 @@ import clip
 import torch
 from PIL import Image
 from pathlib import Path ##что это
+import os
+import platform
+import subprocess
+
+print(clip.__file__)
+
+def open_image(path):
+    if platform.system() == "Windows":
+        os.startfile(path)
+    elif platform.system() == "Darwin":  # macOS
+        subprocess.run(["open", path])
+    else:  # Linux и прочие
+        subprocess.run(["xdg-open", path])
 
 
 def get_device():
@@ -48,37 +61,48 @@ def main():
     device = get_device()
     model, preprocess = ensure_model_loaded(device=device)
 
-    folder_path = input("📁 Введи путь к папке с картинками: ").strip().replace("\\", "/")
-    search_query = input("🔎 Введи промпт: ").strip()
+    while True:
+        folder_path = input("📁 Введи путь к папке с картинками: ").strip().replace("\\", "/")
+        search_query = input("🔎 Введи промпт: ").strip()
 
-    if not search_query:
-        print("❌ Ошибка: Введен пустой промпт.")
-        return
+        if not search_query:
+            print("❌ Ошибка: Введен пустой промпт.")
+            continue  # вернуться к вводу
 
-    try:
-        image_paths = get_image_paths(folder_path)
-        if not image_paths:
-            print("❌ В папке нет подходящих изображений.")
-            return
-    except Exception as e:
-        print(f"❌ Ошибка: {e}")
-        return
+        try:
+            image_paths = get_image_paths(folder_path)
+            if not image_paths:
+                print("❌ В папке нет подходящих изображений.")
+                continue
+        except Exception as e:
+            print(f"❌ Ошибка: {e}")
+            continue
 
-    try:
-        text_features = encode_text(model, search_query, device)
-    except Exception as e:
-        print(f"❌ Ошибка при обработке текста: {e}")
-        return
+        try:
+            text_features = encode_text(model, search_query, device)
+        except Exception as e:
+            print(f"❌ Ошибка при обработке текста: {e}")
+            continue
 
-    results = find_similar_images(model, preprocess, image_paths, text_features, device)
+        results = find_similar_images(model, preprocess, image_paths, text_features, device)
 
-    if results:
-        print("\n🎯 Топ-5 похожих картинок:")
-        for path, score in results[:5]:
-            print(f"{score:.3f} — {path}")
-    else:
-        print("😕 Ничего похожего не найдено.")
+        if results:
+            print("\n🎯 Топ-5 похожих картинок:")
+            for i, (path, score) in enumerate(results[:5], 1):
+                print(f"{i}. {score:.3f} — {path}")
 
+            choice = input("\n🖼 Введи номер картинки, чтобы открыть, или Enter чтобы пропустить: ").strip()
+            if choice.isdigit():
+                idx = int(choice) - 1
+                if 0 <= idx < len(results[:5]):
+                    open_image(results[idx][0])
+                else:
+                    print("❌ Неверный номер.")
+        else:
+            print("😕 Ничего похожего не найдено.")
 
-if __name__ == "__main__":
-    main()
+        # Тут вопрос — повторить или выйти?
+        choice = input("\n🔄 Ввести новый запрос? (д/н): ").strip().lower()
+        if choice != 'д' and choice != 'y' and choice != 'yes':
+            print("👋 Пока!")
+            break
