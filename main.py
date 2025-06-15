@@ -7,8 +7,6 @@ import os
 import platform
 import subprocess
 
-print(clip.__file__)
-
 def open_image(path):
     if platform.system() == "Windows":
         os.startfile(path)
@@ -106,3 +104,7 @@ def main():
         if choice != 'д' and choice != 'y' and choice != 'yes':
             print("👋 Пока!")
             break
+
+
+if __name__ == "__main__":
+    main()
