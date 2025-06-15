@@ -2,40 +2,83 @@ import os
 import clip
 import torch
 from PIL import Image
+from pathlib import Path ##что это
 
-# Загрузка модели
-device = "cuda" if torch.cuda.is_available() else "cpu"
-model, preprocess = clip.load("ViT-B/32", device=device)
 
-# Папка с картинками
-folder_path = r"D:\img"
+def get_device():
+    return "cuda" if torch.cuda.is_available() else "cpu" ##что это
 
-# Ввод текста
-search_query = "blue background, paimon, anime art"
 
-# Преобразуем текст в вектор
-text_tokens = clip.tokenize([search_query]).to(device)
-text_features = model.encode_text(text_tokens)
+def ensure_model_loaded(model_name="ViT-B/32", cache_dir="./model_cache", device="cpu"):
+    os.makedirs(cache_dir, exist_ok=True)
+    model, preprocess = clip.load(model_name, device=device, download_root=cache_dir)
+    return model, preprocess
 
-# Сканируем картинки
-image_paths = [os.path.join(folder_path, f) for f in os.listdir(folder_path) if
-               f.lower().endswith(('.png', '.jpg', '.jpeg'))]
 
-# Храним результаты
-results = []
+def get_image_paths(folder_path):
+    path = Path(folder_path)
+    if not path.exists() or not path.is_dir():
+        raise FileNotFoundError("Папка не найдена или путь неверен.")
+    return [str(p) for p in path.iterdir() if p.suffix.lower() in [".jpg", ".jpeg", ".png"]]
 
-for image_path in image_paths:
+
+def encode_text(model, query, device):
+    tokens = clip.tokenize([query]).to(device)
+    return model.encode_text(tokens)
+
+
+def encode_image(model, image_path, preprocess, device):
     image = preprocess(Image.open(image_path)).unsqueeze(0).to(device)
     with torch.no_grad():
-        image_features = model.encode_image(image)
+        return model.encode_image(image)
 
-    similarity = torch.cosine_similarity(image_features, text_features)
-    results.append((image_path, similarity.item()))
 
-# Сортируем по совпадению
-results.sort(key=lambda x: x[1], reverse=True)
+def find_similar_images(model, preprocess, image_paths, text_features, device):
+    results = []
+    for image_path in image_paths:
+        try:
+            image_features = encode_image(model, image_path, preprocess, device)
+            similarity = torch.cosine_similarity(image_features, text_features)
+            results.append((image_path, similarity.item()))
+        except Exception as e:
+            print(f"⚠️ Проблема с файлом {image_path}: {e}")
+    return sorted(results, key=lambda x: x[1], reverse=True)
 
-# Показываем топ-5
-print("\n🎯 Похожие картинки:")
-for path, score in results[:5]:
-    print(f"{score:.3f} — {path}")
+def main():
+    device = get_device()
+    model, preprocess = ensure_model_loaded(device=device)
+
+    folder_path = input("📁 Введи путь к папке с картинками: ").strip().replace("\\", "/")
+    search_query = input("🔎 Введи промпт: ").strip()
+
+    if not search_query:
+        print("❌ Ошибка: Введен пустой промпт.")
+        return
+
+    try:
+        image_paths = get_image_paths(folder_path)
+        if not image_paths:
+            print("❌ В папке нет подходящих изображений.")
+            return
+    except Exception as e:
+        print(f"❌ Ошибка: {e}")
+        return
+
+    try:
+        text_features = encode_text(model, search_query, device)
+    except Exception as e:
+        print(f"❌ Ошибка при обработке текста: {e}")
+        return
+
+    results = find_similar_images(model, preprocess, image_paths, text_features, device)
+
+    if results:
+        print("\n🎯 Топ-5 похожих картинок:")
+        for path, score in results[:5]:
+            print(f"{score:.3f} — {path}")
+    else:
+        print("😕 Ничего похожего не найдено.")
+
+
+if __name__ == "__main__":
+    main()
